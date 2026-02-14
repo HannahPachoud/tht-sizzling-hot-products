@@ -16,31 +16,31 @@ public class SalesService : ISalesService
 
     public IReadOnlyList<DailyHotProduct> GetDailyHotProducts()
     {
-        var flattenedOrders = FlattenOrders(_orderRepository.GetOrders());
-        var cancelledOrders = RemoveCancelledOrders(_orderRepository.GetOrders(), flattenedOrders);
-        var deduplicatedOrders = RemoveDuplicates(cancelledOrders);
-   
-        var salesPerProductPerDay = CountSalesPerProductPerDay(deduplicatedOrders);
-        var dailyHotProducts = PickDailyWinners(salesPerProductPerDay);
-
-        return dailyHotProducts;
+        var salesPerProductPerDay = GetSalesPerProductPerDay();
+        return PickDailyWinners(salesPerProductPerDay);
     }
 
-    public IReadOnlyList<DailyHotProduct> GetHotProductForLastThreeDays()
+    public DailyHotProduct GetHotProductForLastThreeDays()
     {
-        throw new NotImplementedException();
+        var dateWindowStart = _today.AddDays(-2);
+        var salesPerProductPerDay = GetSalesPerProductPerDay();
+        return PickWinnerForDateWindow(salesPerProductPerDay, dateWindowStart);
     }
 
-    private record FlattenedOrder(string CustomerId, string ProductId, DateOnly Date, string OrderId);
-    private record ProductSalesCount(string ProductId, DateOnly Date, int SalesCount);
-
-    private List<ProductSalesCount> CountSalesPerProductPerDay(List<FlattenedOrder> orders)
+    private List<ProductSalesCount> GetSalesPerProductPerDay()
     {
-        return orders
+        var orders = _orderRepository.GetOrders();
+        var flattenedOrders = FlattenOrders(orders);
+        var withoutCancelled = RemoveCancelledOrders(orders, flattenedOrders);
+        var deduplicated = RemoveDuplicates(withoutCancelled);
+        return deduplicated
             .GroupBy(o => (o.ProductId, o.Date))
             .Select(group => new ProductSalesCount(group.Key.ProductId, group.Key.Date, group.Count()))
             .ToList();
     }
+
+    private record FlattenedOrder(string CustomerId, string ProductId, DateOnly Date, string OrderId);
+    private record ProductSalesCount(string ProductId, DateOnly Date, int SalesCount);
 
     private List<DailyHotProduct> PickDailyWinners(List<ProductSalesCount> salesCounts)
     
@@ -62,6 +62,31 @@ public class SalesService : ISalesService
             })
             .OrderBy(d => d.Date)
             .ToList();
+    }
+
+    private DailyHotProduct PickWinnerForDateWindow(List<ProductSalesCount> salesCounts, DateOnly dateWindowStart)
+    {
+        var productNameLookup = _orderRepository.GetProducts().ToDictionary(p => p.Id, p => p.Name);
+
+        var winner = salesCounts
+            .Where(sale => sale.Date >= dateWindowStart && sale.Date <= _today)
+            .GroupBy(sale => sale.ProductId)
+            .Select(group => new
+            {
+                ProductId = group.Key,
+                TotalSales = group.Sum(s => s.SalesCount)
+            })
+            .OrderByDescending(x => x.TotalSales)
+            .ThenBy(x => productNameLookup[x.ProductId])
+            .First();
+
+        return new DailyHotProduct
+        {
+            Date = _today, //using todays date, as as of today this is the winner of the last x days. Up to front end if it wants to use it or not.
+            ProductId = winner.ProductId,
+            ProductName = productNameLookup[winner.ProductId],
+            SalesCount = winner.TotalSales
+        };
     }
 
     private List<FlattenedOrder> FlattenOrders(IReadOnlyList<Order> orders)

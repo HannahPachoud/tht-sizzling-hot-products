@@ -10,7 +10,7 @@ public interface ISalesService
     IReadOnlyList<DailyHotProduct> GetDailyHotProducts();
 
     /// <summary>
-    /// Returns the top sizzling hot product for each of the last 3 days.
+    /// Returns the single top sizzling hot product over the last 3 days.
     /// </summary>
-    IReadOnlyList<DailyHotProduct> GetHotProductForLastThreeDays();
+    DailyHotProduct GetHotProductForLastThreeDays();
 }
