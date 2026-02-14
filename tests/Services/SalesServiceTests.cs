@@ -203,4 +203,98 @@ public class SalesServiceTests
         Assert.Single(result);
         Assert.Equal("P1", result[0].ProductId);
     }
+
+    // GetHotProductForLastThreeDays tests
+
+    [Fact]
+    public void GetHotProductForLastThreeDays_ReturnsProductWithMostSalesAcrossPeriod()
+    {
+        var orders = new List<Order>
+        {
+            new() { OrderId = "O1", CustomerId = "C1", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O2", CustomerId = "C2", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O3", CustomerId = "C3", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O4", CustomerId = "C4", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P4", Quantity = 1 }] },
+        };
+
+        var result = CreateService(orders).GetHotProductForLastThreeDays();
+
+        Assert.Equal("P1", result.ProductId);
+        Assert.Equal(3, result.SalesCount);
+    }
+
+    [Fact]
+    public void GetHotProductForLastThreeDays_ExcludesOrdersOutsideThreeDayWindow()
+    {
+        var orders = new List<Order>
+        {
+            new() { OrderId = "O1", CustomerId = "C1", Date = new DateOnly(2021, 7, 17), Status = OrderStatus.Completed, Entries = [new() { Id = "P2", Quantity = 1 }] },
+            new() { OrderId = "O2", CustomerId = "C2", Date = new DateOnly(2021, 7, 18), Status = OrderStatus.Completed, Entries = [new() { Id = "P2", Quantity = 1 }] },
+            new() { OrderId = "O3", CustomerId = "C3", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+        };
+
+        var result = CreateService(orders).GetHotProductForLastThreeDays();
+
+        Assert.Equal("P1", result.ProductId);
+        Assert.Equal(1, result.SalesCount);
+    }
+
+    [Fact]
+    public void GetHotProductForLastThreeDays_SumsAcrossDaysNotPerDay()
+    {
+        var orders = new List<Order>
+        {
+            new() { OrderId = "O1", CustomerId = "C1", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O2", CustomerId = "C2", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O3", CustomerId = "C3", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O4", CustomerId = "C4", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P4", Quantity = 1 }] },
+            new() { OrderId = "O5", CustomerId = "C5", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P4", Quantity = 1 }] },
+        };
+
+        var result = CreateService(orders).GetHotProductForLastThreeDays();
+
+        Assert.Equal("P1", result.ProductId);
+        Assert.Equal(3, result.SalesCount);
+    }
+
+    [Fact]
+    public void GetHotProductForLastThreeDays_BreakTiedSalesAlphabetically()
+    {
+        var orders = new List<Order>
+        {
+            new() { OrderId = "O1", CustomerId = "C1", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O2", CustomerId = "C2", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P6", Quantity = 1 }] },
+        };
+
+        var result = CreateService(orders).GetHotProductForLastThreeDays();
+
+        // Arlec (P6) before Ezy (P1) alphabetically
+        Assert.Equal("P6", result.ProductId);
+    }
+
+    [Fact]
+    public void GetHotProductForLastThreeDays_MatchesExpectedOutcome()
+    {
+        var orders = new List<Order>
+        {
+            new() { OrderId = "O10", CustomerId = "C1", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O20", CustomerId = "C2", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O30", CustomerId = "C2", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P2", Quantity = 1 }] },
+            new() { OrderId = "O31", CustomerId = "C3", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P2", Quantity = 1 }, new() { Id = "P1", Quantity = 2 }] },
+            new() { OrderId = "O32", CustomerId = "C32", Date = new DateOnly(2021, 7, 19), Status = OrderStatus.Completed, Entries = [new() { Id = "P2", Quantity = 1 }] },
+            new() { OrderId = "O30", CustomerId = "C2", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Cancelled },
+            new() { OrderId = "O40", CustomerId = "C3", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P4", Quantity = 2 }] },
+            new() { OrderId = "O60", CustomerId = "C3", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P4", Quantity = 2 }, new() { Id = "P1", Quantity = 2 }] },
+            new() { OrderId = "O70", CustomerId = "C4", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P5", Quantity = 2 }] },
+            new() { OrderId = "O80", CustomerId = "C5", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 2 }] },
+            new() { OrderId = "O81", CustomerId = "C5", Date = new DateOnly(2021, 7, 20), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 10 }] },
+            new() { OrderId = "O90", CustomerId = "C5", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P1", Quantity = 1 }] },
+            new() { OrderId = "O100", CustomerId = "C3", Date = new DateOnly(2021, 7, 21), Status = OrderStatus.Completed, Entries = [new() { Id = "P4", Quantity = 1 }, new() { Id = "P6", Quantity = 3 }] },
+        };
+
+        var result = CreateService(orders).GetHotProductForLastThreeDays();
+
+        Assert.Equal("P1", result.ProductId);
+        Assert.Equal("Ezy Storage 37L Flexi Laundry Basket - White", result.ProductName);
+    }
 }
